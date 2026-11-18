@@ -1,0 +1,5 @@
+.cache/
+.qa/
+proxy-yaml-web
+dist/
+.DS_Store
