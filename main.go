@@ -124,6 +124,22 @@ func (a *application) handler() http.Handler {
 		a.subscriptionMu.Unlock()
 		writeJSON(w, 200, map[string]any{"yaml": content, "subscriptionURL": "http://" + r.Host + "/subscription.yaml"})
 	})
+	mux.HandleFunc("POST /api/delete", func(w http.ResponseWriter, r *http.Request) {
+		var request DeleteRequest
+		if !decodeJSON(w, r, &request) {
+			return
+		}
+		result, err := deleteYAML(request.YAML, request.Index)
+		if err != nil {
+			writeJSON(w, 400, map[string]any{"error": err.Error()})
+			return
+		}
+		a.subscriptionMu.Lock()
+		a.subscriptionYAML = result.YAML
+		a.subscriptionMu.Unlock()
+		result.SubscriptionURL = "http://" + r.Host + "/subscription.yaml"
+		writeJSON(w, 200, result)
+	})
 	static, _ := fs.Sub(assets, "static")
 	mux.Handle("GET /", http.FileServer(http.FS(static)))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

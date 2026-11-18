@@ -1,7 +1,7 @@
 'use strict';
 
 const $ = id => document.getElementById(id);
-const state = {token:'', source:'links', result:null, view:'nodes', version:0};
+const state = {token:'', source:'links', result:null, view:'nodes', version:0, busy:false, undo:null};
 
 function showMessage(id, message) {
   const element = $(id);
@@ -26,6 +26,7 @@ async function api(path, body) {
 }
 function invalidate() {
   state.version++;
+  clearUndo();
   if (state.result) {
     state.result = null;
     document.querySelector('.output-panel').classList.add('stale');
@@ -33,9 +34,42 @@ function invalidate() {
     $('result-state').classList.remove('ready');
   }
   $('copy-yaml').disabled = $('download-yaml').disabled = $('save-names').disabled = true;
-  for (const input of document.querySelectorAll('.node-name-input')) input.disabled = true;
+  for (const input of document.querySelectorAll('.node-name-input,.delete-node')) input.disabled = true;
   $('subscription-card').hidden = true;
   $('copy-status').textContent = '转换后可复制、下载或订阅';
+}
+function clearUndo() {
+  state.undo = null;
+  $('undo-delete').hidden = true;
+}
+function hasUnsavedNames() {
+  return Boolean(state.result?.nodes.some(node => node.name !== node.savedName));
+}
+function syncResultControls() {
+  const dirty = hasUnsavedNames();
+  $('save-names').disabled = state.busy || !state.result || !dirty;
+  $('copy-yaml').disabled = $('download-yaml').disabled = $('copy-subscription').disabled = state.busy || !state.result || dirty;
+  $('undo-delete').disabled = state.busy || !state.undo;
+  for (const input of document.querySelectorAll('.node-name-input,.delete-node')) input.disabled = state.busy || !state.result;
+}
+function lockControls() {
+  state.busy = true;
+  const controls = [...document.querySelectorAll('button,input,textarea')].map(element => [element, element.disabled]);
+  controls.forEach(([element]) => { element.disabled = true; });
+  document.querySelector('.output-panel').setAttribute('aria-busy', 'true');
+  return () => {
+    controls.forEach(([element, disabled]) => { element.disabled = disabled; });
+    state.busy = false;
+    document.querySelector('.output-panel').removeAttribute('aria-busy');
+    syncResultControls();
+  };
+}
+function updateResultYAML(data) {
+  state.result.yaml = data.yaml;
+  state.result.subscriptionURL = data.subscriptionURL;
+  $('yaml-output').value = $('template-input').value = data.yaml;
+  $('subscription-url').value = data.subscriptionURL || '';
+  $('subscription-card').hidden = !data.subscriptionURL;
 }
 function switchTabs(buttons, active, attr) {
   for (const button of buttons) {
@@ -117,34 +151,99 @@ function renderResultNodes() {
     count++;
     const row = document.createElement('tr');
     const nameCell = document.createElement('td');
-    const name = document.createElement('input'); name.className = 'node-name-input'; name.type = 'text'; name.value = node.name; name.dataset.index = String(index); name.setAttribute('aria-label', `节点 ${index + 1} 名称`);
+    const name = document.createElement('input'); name.className = 'node-name-input'; name.type = 'text'; name.value = node.name; name.dataset.index = String(index); name.setAttribute('aria-label', `节点 ${index + 1} 名称`); name.disabled = state.busy;
     name.addEventListener('input', () => {
       node.name = name.value;
-      $('save-names').disabled = false;
-      $('copy-yaml').disabled = $('download-yaml').disabled = $('copy-subscription').disabled = true;
-      $('copy-status').textContent = '名称尚未保存，请点击“保存名称”更新订阅';
+      clearUndo();
+      syncResultControls();
+      $('copy-status').textContent = hasUnsavedNames() ? '名称尚未保存，请点击“保存名称”更新订阅' : '名称与已保存配置一致';
     });
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'delete-node'; remove.textContent = '删除'; remove.disabled = state.busy;
+    remove.title = remove.ariaLabel = `删除节点 ${node.savedName}`;
+    remove.addEventListener('click', () => deleteNode(index));
+    const nameRow = document.createElement('div'); nameRow.className = 'node-name-row'; nameRow.append(name, remove);
     const address = document.createElement('div'); address.className = 'server-address'; address.textContent = `${node.server.includes(':') ? '[' + node.server + ']' : node.server}:${node.port}`;
-    nameCell.append(name, address);
+    nameCell.append(nameRow, address);
     const protocolCell = document.createElement('td'); const protocol = document.createElement('span'); protocol.className = 'protocol-pill'; protocol.textContent = node.protocol.toUpperCase(); protocolCell.append(protocol);
     const transportCell = document.createElement('td'); const transport = document.createElement('span'); transport.className = 'transport-pill' + (node.transport.includes('udp') ? ' udp' : ''); transport.textContent = node.transport.toUpperCase(); transportCell.append(transport);
     row.append(nameCell, protocolCell, transportCell); container.append(row);
   }
   $('no-search-results').hidden = count > 0 || !state.result;
+  $('no-search-results').textContent = nodes.length ? '没有匹配的节点。' : '暂无节点，可从左侧继续导入。';
 }
 $('node-search').addEventListener('input', renderResultNodes);
 
+async function deleteNode(index) {
+  if (!state.result || state.busy) return;
+  const result = state.result;
+  const sourceID = state.source === 'links' ? 'links-input' : 'nodes-input';
+  const snapshot = {result:structuredClone(result), sourceID, source:$(sourceID).value, servers:$('replacement-ips').value};
+  const unlock = lockControls();
+  $('copy-status').textContent = '正在删除节点并更新订阅…';
+  try {
+    const data = await api('/api/delete', {yaml:result.yaml, index});
+    if (state.result !== result) return;
+    result.nodes.splice(index, 1);
+    result.total = data.total;
+    updateResultYAML(data);
+    // Consumed inputs would otherwise re-import the deleted node on the next conversion.
+    $(sourceID).value = '';
+    $('replacement-ips').value = '';
+    state.undo = snapshot;
+    $('undo-delete').hidden = false;
+    $('metric-total').textContent = data.total;
+    $('result-state').textContent = '节点已删除';
+    $('convert-status').textContent = `当前配置剩余 ${data.total} 个节点；本批导入输入已清空，可继续添加新节点。`;
+    $('copy-status').textContent = `已删除“${data.deletedName}”，订阅已更新。` + (data.removedRules ? ` 已移除 ${data.removedRules} 条直接指向该节点的规则。` : '') + (hasUnsavedNames() ? ' 其余名称修改仍待保存。' : '');
+    renderResultNodes();
+  } catch (error) {
+    if (state.result === result) $('copy-status').textContent = error.message;
+  } finally {
+    unlock();
+    if (state.undo === snapshot) $('undo-delete').focus();
+  }
+}
+$('undo-delete').addEventListener('click', async () => {
+  if (!state.undo || state.busy) return;
+  const snapshot = state.undo;
+  const result = state.result;
+  const unlock = lockControls();
+  $('copy-status').textContent = '正在撤销删除…';
+  try {
+    // Restore the exact saved YAML first; draft names stay in the local node objects.
+    const data = await api('/api/convert', {template:snapshot.result.yaml, options:{}});
+    if (state.result !== result) return;
+    state.result = snapshot.result;
+    updateResultYAML(data);
+    $(snapshot.sourceID).value = snapshot.source;
+    $('replacement-ips').value = snapshot.servers;
+    $('metric-total').textContent = state.result.total;
+    $('result-state').textContent = '已撤销删除';
+    $('convert-status').textContent = `当前配置共 ${state.result.total} 个节点。`;
+    clearUndo(); renderResultNodes();
+    $('copy-status').textContent = '已撤销上一次删除，订阅和本批导入输入已恢复。' + (hasUnsavedNames() ? ' 名称修改仍待保存。' : '');
+  } catch (error) { $('copy-status').textContent = error.message; }
+  finally {
+    unlock();
+    if (!state.undo) $('node-search').focus();
+  }
+});
+
 async function convert() {
+  if (state.busy) return;
   showMessage('convert-error', '');
   if (!$('template-input').value.trim()) { showMessage('convert-error', '请先加载或粘贴 YAML 模板。'); return; }
   const version = state.version;
   const payload = {template:$('template-input').value, links:state.source === 'links' ? $('links-input').value : '', nodesYaml:state.source === 'nodes' ? $('nodes-input').value : '', servers:$('replacement-ips').value.trim(), options:{cleanExisting:$('clean-existing').checked, syncGroups:$('sync-groups').checked, country:$('country').checked, markExisting:$('mark-existing').checked}};
+  const unlock = lockControls();
   $('convert').disabled = true; $('convert').setAttribute('aria-busy', 'true'); $('convert').querySelector('span').textContent = '正在转换…';
   $('convert-status').textContent = payload.options.country ? '正在去重并查询 IP 归属地…' : '正在合并节点与代理组…';
   try {
     const result = await api('/api/convert', payload);
     if (version !== state.version) return;
     state.result = result;
+    clearUndo();
+    result.nodes.forEach(node => { node.savedName = node.name; });
     $('template-input').value = result.yaml;
     $('template-name').textContent = '当前配置';
     $('template-name').title = '继续导入会合并到当前配置；加载模板可重新开始';
@@ -163,24 +262,21 @@ async function convert() {
     $('copy-status').textContent = '已生成配置，原模板保持不变';
     if (innerWidth <= 760) $('output-heading').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block:'start'});
   } catch (error) { showMessage('convert-error', error.message); $('convert-status').textContent = '转换失败，请检查输入。'; }
-  finally { $('convert').disabled = false; $('convert').removeAttribute('aria-busy'); $('convert').querySelector('span').textContent = '转换并生成订阅'; }
+  finally { $('convert').removeAttribute('aria-busy'); $('convert').querySelector('span').textContent = '转换并生成订阅'; unlock(); }
 }
 $('convert').addEventListener('click', convert);
 $('save-names').addEventListener('click', async () => {
-  if (!state.result) return;
+  if (!state.result || state.busy) return;
   const result = state.result;
   const names = result.nodes.map(node => node.name.trim());
   showMessage('convert-error', '');
-  $('save-names').disabled = true;
-  for (const input of document.querySelectorAll('.node-name-input')) input.disabled = true;
+  const unlock = lockControls();
   try {
     const data = await api('/api/rename', {yaml:result.yaml, names});
     if (state.result !== result) return;
-    result.yaml = data.yaml;
-    result.subscriptionURL = data.subscriptionURL;
-    result.nodes.forEach((node, index) => { node.name = names[index]; });
-    $('yaml-output').value = data.yaml;
-    $('template-input').value = data.yaml;
+    updateResultYAML(data);
+    clearUndo();
+    result.nodes.forEach((node, index) => { node.name = node.savedName = names[index]; });
     $('copy-yaml').disabled = $('download-yaml').disabled = $('copy-subscription').disabled = false;
     renderResultNodes();
     $('copy-status').textContent = '节点名称已保存，引用已同步';
@@ -189,7 +285,7 @@ $('save-names').addEventListener('click', async () => {
     $('copy-status').textContent = error.message;
     $('save-names').disabled = false;
   } finally {
-    if (state.result === result) for (const input of document.querySelectorAll('.node-name-input')) input.disabled = false;
+    unlock();
   }
 });
 $('copy-subscription').addEventListener('click', async () => {
