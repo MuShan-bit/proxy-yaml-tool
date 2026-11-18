@@ -20,7 +20,7 @@ function warnings(id, messages) {
 async function api(path, body) {
   const response = await fetch(path, {method: body === undefined ? 'GET' : 'POST', headers:{'Content-Type':'application/json','X-App-Token':state.token}, body: body === undefined ? undefined : JSON.stringify(body)});
   let data;
-  try { data = await response.json(); } catch { throw new Error('本地服务没有返回有效结果，请检查工具是否仍在运行。'); }
+  try { data = await response.json(); } catch { throw new Error('服务没有返回有效结果，请检查工具是否仍在运行。'); }
   if (!response.ok) { const error = new Error(data.error || '操作失败'); error.data = data; throw error; }
   return data;
 }

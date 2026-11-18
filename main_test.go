@@ -79,6 +79,77 @@ func TestHTTPBlocksForeignRequestsAndMissingTokens(t *testing.T) {
 	}
 }
 
+func TestRemoteHTTPWorkflow(t *testing.T) {
+	a := testApp()
+	a.allowRemote = true
+	handler := a.handler()
+	base := "http://198.51.100.10:8732"
+	request := func(method, path, body string, token bool) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(method, base+path, strings.NewReader(body))
+		req.RemoteAddr = "203.0.113.20:45000"
+		if method == http.MethodPost {
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Origin", base)
+			req.Header.Set("Sec-Fetch-Site", "same-origin")
+		}
+		if token {
+			req.Header.Set("X-App-Token", a.token)
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		return w
+	}
+	for _, path := range []string{"/", "/app.js", "/api/session", "/api/template"} {
+		if w := request(http.MethodGet, path, "", true); w.Code != http.StatusOK {
+			t.Fatalf("remote %s failed: %d %s", path, w.Code, w.Body.String())
+		}
+	}
+	body, _ := json.Marshal(ConvertRequest{Template: blankTemplate, Links: "tuic://uuid:password@node.example:443#Remote", Options: ConvertOptions{SyncGroups: true}})
+	w := request(http.MethodPost, "/api/convert", string(body), true)
+	if w.Code != http.StatusOK {
+		t.Fatalf("remote conversion failed: %d %s", w.Code, w.Body.String())
+	}
+	var result ConvertResult
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Added != 1 || result.SubscriptionURL != base+"/subscription.yaml" {
+		t.Fatal("remote result or subscription URL incorrect")
+	}
+	rename, _ := json.Marshal(RenameRequest{YAML: result.YAML, Names: []string{"Remote-Renamed"}})
+	if w := request(http.MethodPost, "/api/rename", string(rename), true); w.Code != http.StatusOK {
+		t.Fatalf("remote rename failed: %s", w.Body.String())
+	}
+	if w := request(http.MethodGet, "/subscription.yaml", "", false); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Remote-Renamed") {
+		t.Fatal("remote Clash Verge subscription unavailable")
+	}
+	if w := request(http.MethodPost, "/api/convert", string(body), false); w.Code != http.StatusForbidden {
+		t.Fatal("remote API accepted a request without its session token")
+	}
+}
+
+func TestRemoteHTTPStillRejectsCrossSiteRequests(t *testing.T) {
+	for _, tc := range []struct{ origin, site string }{
+		{"http://other.example", "same-origin"},
+		{"null", ""},
+		{"http://198.51.100.10:8732", "cross-site"},
+	} {
+		a := testApp()
+		a.allowRemote = true
+		req := httptest.NewRequest(http.MethodPost, "http://198.51.100.10:8732/api/convert", strings.NewReader(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", tc.origin)
+		req.Header.Set("Sec-Fetch-Site", tc.site)
+		req.Header.Set("X-App-Token", a.token)
+		w := httptest.NewRecorder()
+		a.handler().ServeHTTP(w, req)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("cross-site request accepted: origin=%s site=%s status=%d", tc.origin, tc.site, w.Code)
+		}
+	}
+}
+
 func TestEmbeddedPageAndBlankTemplate(t *testing.T) {
 	a := testApp()
 	for _, path := range []string{"/", "/app.js", "/style.css"} {

@@ -29,6 +29,7 @@ var assets embed.FS
 
 type application struct {
 	templatePath, token string
+	allowRemote         bool
 	subscriptionMu      sync.RWMutex
 	subscriptionYAML    string
 }
@@ -135,7 +136,7 @@ func (a *application) handler() http.Handler {
 			host = r.Host
 		}
 		ip := net.ParseIP(strings.Trim(host, "[]"))
-		if host != "localhost" && (ip == nil || !ip.IsLoopback()) {
+		if !a.allowRemote && host != "localhost" && (ip == nil || !ip.IsLoopback()) {
 			writeJSON(w, 403, map[string]any{"error": "仅允许本机访问"})
 			return
 		}
@@ -170,26 +171,31 @@ func run() error {
 		args = args[1:]
 	}
 	flags := flag.NewFlagSet("proxy-yaml-web", flag.ContinueOnError)
-	addr := flags.String("listen", "127.0.0.1:8732", "本机网页监听地址")
+	addr := flags.String("listen", "127.0.0.1:8732", "网页监听地址；0.0.0.0:8732 允许远程访问")
 	templatePath := flags.String("template", "./template.yaml", "默认 YAML 模板路径")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	host, _, err := net.SplitHostPort(*addr)
-	if err != nil || (host != "localhost" && !net.ParseIP(host).IsLoopback()) {
-		return errors.New("网页仅支持绑定本机回环地址，例如 127.0.0.1:8732")
+	if err != nil {
+		return fmt.Errorf("监听地址格式错误，请使用 IP:端口，例如 0.0.0.0:8732：%w", err)
 	}
+	ip := net.ParseIP(host)
+	allowRemote := host != "localhost" && (ip == nil || !ip.IsLoopback())
 	var random [24]byte
 	if _, err := rand.Read(random[:]); err != nil {
 		return err
 	}
-	a := &application{templatePath: *templatePath, token: hex.EncodeToString(random[:])}
+	a := &application{templatePath: *templatePath, token: hex.EncodeToString(random[:]), allowRemote: allowRemote}
 	server := &http.Server{Handler: a.handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 90 * time.Second, IdleTimeout: 30 * time.Second}
 	listener, err := net.Listen("tcp", *addr)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("节点配置转换工具：http://%s\n按 Ctrl+C 停止。配置仅预览 / 下载，不覆盖原模板。\n", listener.Addr())
+	if allowRemote {
+		fmt.Println("已启用远程访问，请在其他设备使用 http://服务器IP:端口 访问。当前页面和订阅无需登录。")
+	}
 	return server.Serve(listener)
 }
 
