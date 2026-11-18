@@ -32,6 +32,8 @@ type application struct {
 	allowRemote         bool
 	subscriptionMu      sync.RWMutex
 	subscriptionYAML    string
+	v2raySubscription   string
+	v2rayReady          bool
 }
 
 func writeJSON(w http.ResponseWriter, code int, value any) {
@@ -140,6 +142,7 @@ func (a *application) handler() http.Handler {
 		result.SubscriptionURL = "http://" + r.Host + "/subscription.yaml"
 		writeJSON(w, 200, result)
 	})
+	a.registerV2Ray(mux)
 	static, _ := fs.Sub(assets, "static")
 	mux.Handle("GET /", http.FileServer(http.FS(static)))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

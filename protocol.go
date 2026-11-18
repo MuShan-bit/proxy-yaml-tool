@@ -125,7 +125,7 @@ func applyTLS(p Proxy, q url.Values) {
 	}
 }
 
-func ParseLink(raw string) (Proxy, error) {
+func normalizeShareLink(raw string) string {
 	raw = strings.TrimSpace(raw)
 	// Some copied Markdown links escape the scheme's colon.
 	for _, scheme := range []string{"vmess", "vless", "trojan", "hysteria2", "hy2", "tuic", "anytls", "ss", "shadowsocks"} {
@@ -135,6 +135,11 @@ func ParseLink(raw string) (Proxy, error) {
 			break
 		}
 	}
+	return raw
+}
+
+func ParseLink(raw string) (Proxy, error) {
+	raw = normalizeShareLink(raw)
 	if strings.HasPrefix(strings.ToLower(raw), "vmess://") {
 		return parseVMess(raw)
 	}
@@ -251,7 +256,7 @@ func parseVMess(raw string) (Proxy, error) {
 	if text(data["tls"]) == "tls" {
 		q.Set("security", "tls")
 	}
-	for _, k := range []string{"sni", "fp", "alpn", "allowInsecure"} {
+	for _, k := range []string{"sni", "fp", "alpn", "allowInsecure", "insecure"} {
 		putString := text(data[k])
 		if putString != "" {
 			q.Set(k, putString)

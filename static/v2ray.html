@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>v2rayN 订阅转换 · Proxy YAML</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/v2ray.js" defer></script>
+</head>
+<body class="v2ray-page">
+  <a class="skip-link" href="#workspace">跳到转换工作台</a>
+  <header class="app-header">
+    <a class="brand" href="/" aria-label="Proxy YAML 首页"><span class="brand-mark" aria-hidden="true">P<span>Y</span></span><strong>Proxy YAML</strong><span class="version">GO</span></a>
+    <div class="local-badge"><span class="status-dot"></span>服务运行中<span class="desktop-only"> · v2rayN 订阅</span></div>
+  </header>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="工具导航">
+      <div class="nav-caption">工作空间</div>
+      <a href="/" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M8 3l-4 4 4 4m8 2 4 4-4 4"/></svg>Clash Verge 订阅</a>
+      <a href="/v2ray.html" class="nav-item active" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 6 8 13 8-13M8 6l4 7 4-7"/></svg>v2rayN 订阅</a>
+      <a href="#help" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4m0 3h.01"/></svg>使用说明</a>
+      <div class="sidebar-note"><span class="small-kicker">OUTPUT FORMAT</span><strong>v2rayN / 分享链接</strong><p>生成批量订阅，或使用单节点二维码扫码导入。</p></div>
+    </aside>
+    <main id="workspace">
+      <nav class="workspace-switch" aria-label="订阅类型"><a href="/">Clash Verge</a><a href="/v2ray.html" aria-current="page">v2rayN</a></nav>
+      <div class="page-heading"><div><div class="breadcrumb">工作空间 / v2rayN</div><h1>v2rayN 订阅转换</h1><p>导入节点，生成订阅地址或单节点二维码。</p></div><span class="format-badge">.txt</span></div>
+      <div id="app-error" class="message error" role="alert" hidden></div>
+      <div class="workspace-grid">
+        <div class="input-column">
+          <section class="panel" aria-labelledby="source-heading">
+            <div class="panel-heading"><div class="title-with-number"><span class="step-number">1</span><h2 id="source-heading">导入节点</h2></div><span class="muted">自动去重</span></div>
+            <div class="tabs" role="tablist" aria-label="节点导入方式"><button id="links-tab" class="tab active" role="tab" aria-selected="true" aria-controls="links-panel" data-source="links">分享链接 / 订阅内容</button><button id="nodes-tab" class="tab" role="tab" aria-selected="false" aria-controls="nodes-panel" tabindex="-1" data-source="yaml">节点 YAML</button></div>
+            <div id="links-panel" class="panel-body" role="tabpanel" aria-labelledby="links-tab">
+              <div class="field-heading"><label for="links-input">分享链接或 Base64 订阅内容</label><button id="links-upload-button" class="text-button" type="button">导入 TXT</button><input id="links-upload" type="file" accept=".txt,.list" hidden></div>
+              <textarea id="links-input" class="code-input" rows="13" spellcheck="false" placeholder="vless://…&#10;vmess://…&#10;trojan://…&#10;hysteria2://…"></textarea>
+              <p class="helper">每行一个节点，也可粘贴整份 Base64 订阅内容。支持 VLESS、VMess、Trojan、Hysteria2、TUIC、AnyTLS、Shadowsocks / SS 2022；原始链接的传输参数会保留。</p>
+            </div>
+            <div id="nodes-panel" class="panel-body" role="tabpanel" aria-labelledby="nodes-tab" hidden>
+              <div class="field-heading"><label for="nodes-input">节点 YAML</label><button id="nodes-upload-button" class="text-button" type="button">导入 YAML</button><input id="nodes-upload" type="file" accept=".yaml,.yml,.json" hidden></div>
+              <textarea id="nodes-input" class="code-input" rows="13" spellcheck="false" placeholder="proxies:&#10;  - name: 示例节点&#10;    type: trojan&#10;    server: example.com&#10;    port: 443&#10;    password: your-password"></textarea>
+              <p class="helper">可使用 Clash / Mihomo 配置或节点数组，仅转换 proxies。DNS、分流规则和代理组不属于 v2rayN 分享订阅；无法表达的节点选项会提示并跳过。</p>
+            </div>
+            <div class="panel-body v2ray-import-footer">
+              <div id="convert-error" class="message error" role="alert" hidden></div>
+              <button id="convert" class="button primary convert-button" type="button"><span>导入并生成订阅</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button>
+              <p id="convert-status" class="helper" role="status">新节点会合并到右侧列表；配置相同则跳过，名称不参与去重。</p>
+            </div>
+          </section>
+          <section id="help" class="panel" aria-labelledby="help-heading">
+            <div class="panel-heading"><h2 id="help-heading">如何导入 v2rayN</h2></div>
+            <div class="panel-body v2ray-help">
+              <p><strong>批量订阅</strong>复制右侧订阅地址，在 v2rayN 的订阅分组中添加 URL，再更新订阅。</p>
+              <p><strong>扫码导入</strong>点击节点的“二维码”，使用客户端的扫描屏幕二维码功能，或用支持该协议的手机客户端扫码。二维码也可下载为 PNG。</p>
+              <p><strong>改名与删除</strong>改名后点击“保存名称”；删除立即更新订阅，可撤销上一次删除。客户端需更新订阅后才会看到变化。</p>
+              <p class="helper">协议与传输是否可用取决于客户端版本及所选内核。结果保存在服务进程内存中；重启前请下载订阅留存。二维码含节点认证信息，由本机 Go 程序生成。</p>
+            </div>
+          </section>
+        </div>
+        <section class="panel output-panel" aria-labelledby="output-heading">
+          <div class="panel-heading"><div class="title-with-number"><span class="step-number">2</span><h2 id="output-heading">v2rayN 节点</h2></div><span id="result-state" class="status-tag">等待导入</span></div>
+          <div class="metrics v2ray-metrics"><div><span>本次新增</span><strong id="metric-added">—</strong></div><div><span>跳过重复</span><strong id="metric-skipped">—</strong></div><div><span>最终节点</span><strong id="metric-total">—</strong></div></div>
+          <div id="subscription-card" class="subscription-card" hidden><div><span class="small-kicker">V2RAYN SUBSCRIPTION</span><strong>订阅地址</strong><p>此地址返回 Base64 分享链接订阅，独立于 Clash Verge 配置。</p></div><div class="subscription-url-row"><input id="subscription-url" readonly aria-label="v2rayN 订阅地址"><button id="copy-subscription" class="button secondary" type="button">复制地址</button></div></div>
+          <div id="output-empty" class="empty-state"><h3>导入后在这里管理节点</h3><p>可逐个改名、删除、复制分享链接或显示二维码。</p></div>
+          <div id="nodes-view" hidden>
+            <div class="node-list-toolbar"><label class="search-field" for="node-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="node-search" type="search" aria-label="搜索节点名称、IP 或协议" placeholder="搜索节点名称、IP 或协议" autocomplete="off"></label><button id="undo-delete" class="button secondary" type="button" hidden>撤销删除</button><button id="save-names" class="button secondary" type="button" disabled>保存名称</button></div>
+            <p class="helper rename-help">名称保存后，分享链接、订阅与二维码会同步更新。</p>
+            <div id="result-nodes" class="v2ray-node-list"></div>
+            <p id="no-search-results" class="no-results" hidden>没有匹配的节点。</p>
+            <details class="v2ray-preview"><summary>查看分享链接</summary><label class="sr-only" for="links-output">已保存的分享链接</label><textarea id="links-output" class="code-input" rows="7" readonly spellcheck="false"></textarea></details>
+          </div>
+          <div id="result-warnings" class="message warning output-warnings" hidden></div>
+          <div class="export-bar"><div id="manual-copy-panel" hidden><label for="manual-copy">手动复制内容</label><textarea id="manual-copy" class="code-input" rows="3" readonly spellcheck="false"></textarea></div><span id="copy-status" class="helper" role="status">生成订阅后可复制、下载或扫码</span><div class="button-row"><button id="copy-links" class="button secondary" type="button" disabled>复制全部链接</button><button id="download-subscription" class="button primary" type="button" disabled>下载订阅</button></div></div>
+        </section>
+      </div>
+      <footer><span>Proxy YAML · v2rayN 转换工具</span><span>Go + HTML · 二维码在本机生成</span></footer>
+    </main>
+  </div>
+  <dialog id="qr-dialog" class="qr-dialog" aria-labelledby="qr-title">
+    <div class="qr-heading"><h2 id="qr-title">节点二维码</h2><button id="qr-close" class="button secondary" type="button" aria-label="关闭二维码">关闭</button></div>
+    <p id="qr-name" class="qr-name"></p>
+    <div class="qr-image-wrap"><img id="qr-image" width="512" height="512" alt="可导入客户端的单节点二维码" hidden><p id="qr-loading" role="status">正在生成二维码…</p></div>
+    <p id="qr-error" class="message error" role="alert" hidden></p>
+    <details id="qr-link-details"><summary>查看分享链接</summary><label class="sr-only" for="qr-link">此节点的分享链接</label><textarea id="qr-link" class="code-input" rows="3" readonly spellcheck="false"></textarea></details>
+    <p class="helper">用支持此协议的客户端扫码，或使用 v2rayN 的扫描屏幕二维码功能。图片包含完整节点认证信息。</p>
+    <div class="button-row"><button id="qr-copy" class="button secondary" type="button">复制分享链接</button><button id="qr-download" class="button primary" type="button" disabled>下载二维码</button></div>
+    <p id="qr-status" class="helper" role="status"></p>
+  </dialog>
+</body>
+</html>

@@ -18,12 +18,14 @@
   <div class="app-shell">
     <aside class="sidebar" aria-label="工具导航">
       <div class="nav-caption">工作空间</div>
-      <a href="#workspace" class="nav-item active"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M8 3l-4 4 4 4m8 2 4 4-4 4"/></svg>节点转换</a>
+      <a href="#workspace" class="nav-item active" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M8 3l-4 4 4 4m8 2 4 4-4 4"/></svg>Clash Verge 订阅</a>
+      <a href="/v2ray.html" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 6 8 13 8-13M8 6l4 7 4-7"/></svg>v2rayN 订阅</a>
       <a href="#protocols" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h8v8H8zM10 3v5m4-5v5m-4 8v5m4-5v5M3 10h5m-5 4h5m8-4h5m-5 4h5"/></svg>支持协议</a>
       <a href="#help" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4m0 3h.01"/></svg>使用说明</a>
       <div class="sidebar-note"><span class="small-kicker">OUTPUT FORMAT</span><strong>Mihomo / Clash Meta</strong><p>导入节点，合并模板后生成一个可供 Clash Verge 读取的订阅地址。</p></div>
     </aside>
     <main id="workspace">
+      <nav class="workspace-switch" aria-label="订阅类型"><a href="/" aria-current="page">Clash Verge</a><a href="/v2ray.html">v2rayN</a></nav>
       <div class="page-heading"><div><div class="breadcrumb">工作空间 / 节点转换</div><h1>节点订阅转换</h1><p>粘贴或上传一批节点，去重、合并模板并生成订阅链接。</p></div><span class="format-badge">.yaml</span></div>
       <div class="workflow" aria-label="转换步骤"><span><b>01</b>导入节点</span><i aria-hidden="true">→</i><span><b>02</b>合并模板</span><i aria-hidden="true">→</i><span><b>03</b>生成订阅</span></div>
       <div id="app-error" class="message error" role="alert" hidden></div>
